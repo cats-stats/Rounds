@@ -8,12 +8,20 @@ data = pd.read_csv("ex_out.csv")
 # Function to process the data
 def process_data(data):
     processed_data = []
+    current_round = 1
+    current_half = 1
+    next_media_timeout_minute = 16
 
     for index, row in data.iterrows():
         half = row["Half"]
         minutes, seconds = divmod(
             int(row["Time"].split(":")[0]) * 60 + int(row["Time"].split(":")[1]), 60
         )
+
+        if current_half == 1 and half == 2:
+            current_half = 2
+            next_media_timeout_minute = 16
+            current_round += 1
 
         # Determine play type and player name
         if pd.notna(row["Davidson"]):
@@ -37,6 +45,15 @@ def process_data(data):
             davidson_score = row["Davidson Score"]
             charlotte_score = row["Charlotte Score"]
 
+        # Check for media timeout
+        # Edge case: if the media timeout is at the exact time, we need to handle it separately
+        if play_type == "Timeout" and (
+            (minutes == next_media_timeout_minute and seconds == 0)
+            or (minutes < next_media_timeout_minute)
+        ):
+            current_round += 1
+            next_media_timeout_minute -= 4
+
         processed_data.append(
             {
                 "half": half,
@@ -52,6 +69,7 @@ def process_data(data):
                 ),  # Last name after the comma
                 "davidson_score": davidson_score,
                 "opponent_score": charlotte_score,
+                "round": current_round,
             }
         )
 
@@ -65,7 +83,7 @@ def insert_data(processed_data):
 
     for entry in processed_data:
         cur.execute(
-            "INSERT INTO plays (first_name, last_name, team, play_type, davidson_score, opponent_score, half, minutes, seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO plays (first_name, last_name, team, play_type, davidson_score, opponent_score, half, minutes, seconds, round) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entry["first_name"],
                 entry["last_name"],
@@ -76,6 +94,7 @@ def insert_data(processed_data):
                 entry["half"],
                 entry["minutes"],
                 entry["seconds"],
+                entry["round"],
             ),
         )
 
